@@ -100,13 +100,20 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Railway HTTPS proxy mögött
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# CSRF — Railway domain kezelése (a kalkulátorból átvéve)
+# Railway automatikus domain (környezeti változóból)
 RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')
-CSRF_TRUSTED_ORIGINS = ['https://naptar-app-production.up.railway.app']
-if RAILWAY_PUBLIC_DOMAIN:
-    origin = f'https://{RAILWAY_PUBLIC_DOMAIN}'
-    if origin not in CSRF_TRUSTED_ORIGINS:
-        CSRF_TRUSTED_ORIGINS.append(origin)
+
+# CSRF — Railway domain kezelése (a kalkulátorból átvett, továbbfejlesztett minta)
+# 1. Kézzel beállított CSRF_TRUSTED_ORIGINS változó (vesszővel elválasztva)
+# 2. Ha nincs, a Railway RAILWAY_PUBLIC_DOMAIN automatikus domainje
+# 3. Ha az sincs, üres lista
+_csrf_env = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+if _csrf_env:
+    CSRF_TRUSTED_ORIGINS = _csrf_env.split(',')
+elif RAILWAY_PUBLIC_DOMAIN:
+    CSRF_TRUSTED_ORIGINS = [f'https://{RAILWAY_PUBLIC_DOMAIN}']
+else:
+    CSRF_TRUSTED_ORIGINS = []
 
 # Bejelentkezési URL-ek
 LOGIN_URL = '/login/'
