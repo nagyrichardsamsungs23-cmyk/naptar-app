@@ -20,9 +20,12 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.WARNING('ℹ️  A beállítások már léteznek, kihagyva.'))
 
-        self.stdout.write(f'   Munkaidő: {settings.workday_start} – {settings.workday_end}')
-        self.stdout.write(f'   Ebédszünet: {settings.lunch_break_start} – {settings.lunch_break_end}')
-        self.stdout.write(f'   Napi óra: {settings.default_daily_hours} (max {settings.max_daily_hours})')
+        sat_status = "aktív" if settings.sat_active else "szabadnap"
+        sun_status = "aktív" if settings.sun_active else "szabadnap"
+        self.stdout.write(f'   Hétfő–Péntek: {settings.mon_start}–{settings.mon_end}')
+        self.stdout.write(f'   Szombat: {sat_status}')
+        self.stdout.write(f'   Vasárnap: {sun_status}')
+        self.stdout.write(f'   Max napi óra: {settings.max_daily_hours}')
 
         # 2. Admin felhasználó létrehozása (ha még nincs)
         admin_password = os.environ.get('ADMIN_PASSWORD', 'Admin1234')
@@ -42,7 +45,6 @@ class Command(BaseCommand):
             user.save()
             self.stdout.write(self.style.SUCCESS(f'✅ Admin felhasználó létrehozva (admin / {admin_password}).'))
         else:
-            # Frissítsük a jogosultságokat és aktiváljuk
             updated = False
             if not user.is_staff or not user.is_superuser:
                 user.is_staff = True

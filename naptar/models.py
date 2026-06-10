@@ -155,20 +155,37 @@ class TimeOff(models.Model):
 class Settings(models.Model):
     """
     Általános beállítások — egyetlen rekord.
-    Az alkalmazás ebből olvassa ki a munkaidő kereteket, ebédszünetet, stb.
-    Az admin felületen csak ezt az egy rekordot szabad szerkeszteni.
+    Minden napra külön beállítható, hogy dolgozol-e, és ha igen, mettől meddig.
     """
-    workday_start = models.TimeField("Munkanap kezdete", default='08:00')
-    workday_end = models.TimeField("Munkanap vége", default='16:00')
-    lunch_break_start = models.TimeField("Ebédszünet kezdete", default='12:00')
-    lunch_break_end = models.TimeField("Ebédszünet vége", default='12:30')
-    default_daily_hours = models.DecimalField(
-        "Alap napi munkaóra",
-        max_digits=4,
-        decimal_places=1,
-        default=8.0,
-        validators=[MinValueValidator(Decimal('1')), MaxValueValidator(Decimal('16'))]
-    )
+    # Hétfő
+    mon_active = models.BooleanField("Hétfő", default=True)
+    mon_start = models.TimeField("Hétfő kezdés", default='08:00', null=True, blank=True)
+    mon_end = models.TimeField("Hétfő befejezés", default='16:00', null=True, blank=True)
+    # Kedd
+    tue_active = models.BooleanField("Kedd", default=True)
+    tue_start = models.TimeField("Kedd kezdés", default='08:00', null=True, blank=True)
+    tue_end = models.TimeField("Kedd befejezés", default='16:00', null=True, blank=True)
+    # Szerda
+    wed_active = models.BooleanField("Szerda", default=True)
+    wed_start = models.TimeField("Szerda kezdés", default='08:00', null=True, blank=True)
+    wed_end = models.TimeField("Szerda befejezés", default='16:00', null=True, blank=True)
+    # Csütörtök
+    thu_active = models.BooleanField("Csütörtök", default=True)
+    thu_start = models.TimeField("Csütörtök kezdés", default='08:00', null=True, blank=True)
+    thu_end = models.TimeField("Csütörtök befejezés", default='16:00', null=True, blank=True)
+    # Péntek
+    fri_active = models.BooleanField("Péntek", default=True)
+    fri_start = models.TimeField("Péntek kezdés", default='08:00', null=True, blank=True)
+    fri_end = models.TimeField("Péntek befejezés", default='16:00', null=True, blank=True)
+    # Szombat
+    sat_active = models.BooleanField("Szombat", default=False)
+    sat_start = models.TimeField("Szombat kezdés", default='08:00', null=True, blank=True)
+    sat_end = models.TimeField("Szombat befejezés", default='14:00', null=True, blank=True)
+    # Vasárnap
+    sun_active = models.BooleanField("Vasárnap", default=False)
+    sun_start = models.TimeField("Vasárnap kezdés", default='08:00', null=True, blank=True)
+    sun_end = models.TimeField("Vasárnap befejezés", default='14:00', null=True, blank=True)
+
     max_daily_hours = models.DecimalField(
         "Maximum napi munkaóra",
         max_digits=4,
@@ -184,21 +201,13 @@ class Settings(models.Model):
         default=0.5,
         validators=[MinValueValidator(Decimal('0.5'))]
     )
-    allow_weekend = models.BooleanField("Hétvégi munka engedélyezése", default=False)
-    mon_active = models.BooleanField("Hétfő", default=True)
-    tue_active = models.BooleanField("Kedd", default=True)
-    wed_active = models.BooleanField("Szerda", default=True)
-    thu_active = models.BooleanField("Csütörtök", default=True)
-    fri_active = models.BooleanField("Péntek", default=True)
-    sat_active = models.BooleanField("Szombat", default=False)
-    sun_active = models.BooleanField("Vasárnap", default=False)
 
     class Meta:
         verbose_name = "Beállítás"
         verbose_name_plural = "Beállítások"
 
     def __str__(self):
-        return f"Beállítások ({self.workday_start:%H:%M}–{self.workday_end:%H:%M}, {self.default_daily_hours} ó/nap)"
+        return f"Beállítások (hétfő–péntek: {self.mon_start}–{self.mon_end}, max {self.max_daily_hours} ó/nap)"
 
     def save(self, *args, **kwargs):
         """Csak egy rekord lehet."""
@@ -211,15 +220,27 @@ class Settings(models.Model):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
 
+    # Napi mezők mapje: (active_attr, start_attr, end_attr)
+    _DAY_MAP = {
+        0: ('mon_active', 'mon_start', 'mon_end'),
+        1: ('tue_active', 'tue_start', 'tue_end'),
+        2: ('wed_active', 'wed_start', 'wed_end'),
+        3: ('thu_active', 'thu_start', 'thu_end'),
+        4: ('fri_active', 'fri_start', 'fri_end'),
+        5: ('sat_active', 'sat_start', 'sat_end'),
+        6: ('sun_active', 'sun_start', 'sun_end'),
+    }
+
     def is_workday(self, date):
         """Igaz-e, hogy az adott nap munkanap."""
-        weekday_map = {
-            0: self.mon_active,
-            1: self.tue_active,
-            2: self.wed_active,
-            3: self.thu_active,
-            4: self.fri_active,
-            5: self.sat_active,
-            6: self.sun_active,
-        }
-        return weekday_map.get(date.weekday(), False)
+        if date.weekday() not in self._DAY_MAP:
+            return False
+        active_attr, _, _ = self._DAY_MAP[date.weekday()]
+        return getattr(self, active_attr, False)
+
+    def get_day_hours(self, date):
+        """Visszaadja az adott nap munkaidejét (start, end) vagy (None, None)-t."""
+        if not self.is_workday(date):
+            return None, None
+        _, start_attr, end_attr = self._DAY_MAP[date.weekday()]
+        return getattr(self, start_attr), getattr(self, end_attr)

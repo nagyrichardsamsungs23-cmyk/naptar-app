@@ -81,31 +81,38 @@ class TimeOffAdmin(admin.ModelAdmin):
 @admin.register(Settings)
 class SettingsAdmin(admin.ModelAdmin):
     """
-    Egyetlen beállítás rekord. Az "Add" gombot érdemes elrejteni,
-    de a Django admin alapból nem támogat singleton admin-t,
-    így a felhasználót tájékoztatjuk.
+    Beállítások — naponkénti munkaidő.
+    Egyetlen rekord, az Add gomb letiltva.
     """
 
     fieldsets = (
-        ("Munkaidő keretek", {
-            'fields': ['workday_start', 'workday_end', 'default_daily_hours',
-                       'max_daily_hours']
+        ("Hétfő", {
+            'fields': ['mon_active', ('mon_start', 'mon_end')]
         }),
-        ("Ebédszünet", {
-            'fields': ['lunch_break_start', 'lunch_break_end']
+        ("Kedd", {
+            'fields': ['tue_active', ('tue_start', 'tue_end')]
         }),
-        ("Munkanapok", {
-            'fields': ['mon_active', 'tue_active', 'wed_active',
-                       'thu_active', 'fri_active', 'sat_active', 'sun_active'],
-            'description': 'Jelöld be, mely napokon dolgozol.'
+        ("Szerda", {
+            'fields': ['wed_active', ('wed_start', 'wed_end')]
         }),
-        ("Egyéb", {
-            'fields': ['min_schedule_block_hours', 'allow_weekend']
+        ("Csütörtök", {
+            'fields': ['thu_active', ('thu_start', 'thu_end')]
+        }),
+        ("Péntek", {
+            'fields': ['fri_active', ('fri_start', 'fri_end')]
+        }),
+        ("Szombat", {
+            'fields': ['sat_active', ('sat_start', 'sat_end')]
+        }),
+        ("Vasárnap", {
+            'fields': ['sun_active', ('sun_start', 'sun_end')]
+        }),
+        ("Korlátozások", {
+            'fields': ['max_daily_hours', 'min_schedule_block_hours']
         }),
     )
 
     def has_add_permission(self, request):
-        """Csak egy rekord engedélyezett."""
         return not Settings.objects.exists()
 
     def has_delete_permission(self, request, obj=None):

@@ -420,18 +420,19 @@ def settings_view(request):
     settings_obj = Settings.load()
     
     if request.method == 'POST':
-        settings_obj.workday_start = request.POST.get('workday_start', settings_obj.workday_start)
-        settings_obj.workday_end = request.POST.get('workday_end', settings_obj.workday_end)
-        settings_obj.lunch_break_start = request.POST.get('lunch_break_start', settings_obj.lunch_break_start)
-        settings_obj.lunch_break_end = request.POST.get('lunch_break_end', settings_obj.lunch_break_end)
-        settings_obj.default_daily_hours = Decimal(request.POST.get('default_daily_hours', '8') or '8')
-        settings_obj.max_daily_hours = Decimal(request.POST.get('max_daily_hours', '10') or '10')
-        settings_obj.min_schedule_block_hours = Decimal(request.POST.get('min_schedule_block_hours', '0.5') or '0.5')
-        settings_obj.allow_weekend = request.POST.get('allow_weekend') == 'on'
-        
-        # Munkanapok
+        # Naponkénti munkaidők
         for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
             setattr(settings_obj, f'{day}_active', request.POST.get(f'{day}_active') == 'on')
+            start_val = request.POST.get(f'{day}_start', '')
+            end_val = request.POST.get(f'{day}_end', '')
+            if start_val:
+                setattr(settings_obj, f'{day}_start', start_val)
+            if end_val:
+                setattr(settings_obj, f'{day}_end', end_val)
+        
+        # Korlátozások
+        settings_obj.max_daily_hours = Decimal(request.POST.get('max_daily_hours', '10') or '10')
+        settings_obj.min_schedule_block_hours = Decimal(request.POST.get('min_schedule_block_hours', '0.5') or '0.5')
         
         settings_obj.save()
         return redirect('settings')
