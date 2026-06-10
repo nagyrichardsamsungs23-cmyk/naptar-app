@@ -125,6 +125,16 @@ def job_create(request):
             priority=request.POST.get('priority', 'medium'),
             status='draft',
         )
+        # Dátum validáció
+        if job.earliest_start_date and job.deadline and job.earliest_start_date > job.deadline:
+            return render(request, 'naptar/job_form.html', {
+                'page': 'job_create',
+                'job': None,
+                'statuses': Job.STATUS_CHOICES,
+                'priorities': Job.PRIORITY_CHOICES,
+                'error': 'A kezdő dátum nem lehet a határidő után.',
+            })
+        
         # remaining_hours = estimated_hours kezdetben
         job.remaining_hours = job.estimated_hours
         job.save()
@@ -219,9 +229,6 @@ def api_events(request):
     GET paraméterek: start, end (ISO dátumok)
     Visszaadja a beosztásokat és a tiltott időszakokat.
     """
-    import json
-    from django.http import JsonResponse
-    
     start_str = request.GET.get('start', '')
     end_str = request.GET.get('end', '')
     
@@ -345,7 +352,14 @@ def api_event_move(request, event_id):
         schedule.end_datetime = new_end
         schedule.is_auto_scheduled = False
     
-    schedule.save()
+    ok, err = _check_overlap(schedule, schedule.start_datetime, schedule.end_datetime)
+    if not ok:
+        return JsonResponse({'success': False, 'error': err})
+    
+    try:
+        schedule.save()
+    except ValueError as e:
+        return JsonResponse({'success': False, 'error': str(e)})
     
     # Frissítsük a munka remaining_hours értékét
     _update_job_remaining(schedule.job)
@@ -377,7 +391,15 @@ def api_event_resize(request, event_id):
     if new_end:
         schedule.end_datetime = new_end
         schedule.is_auto_scheduled = False
-        schedule.save()
+        
+        ok, err = _check_overlap(schedule, schedule.start_datetime, schedule.end_datetime)
+        if not ok:
+            return JsonResponse({'success': False, 'error': err})
+        
+        try:
+            schedule.save()
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': str(e)})
     
     _update_job_remaining(schedule.job)
     
@@ -408,6 +430,28 @@ def _update_job_remaining(job):
     )['total'] or 0
     job.remaining_hours = max(0, float(job.estimated_hours) - float(total_scheduled))
     job.save(update_fields=['remaining_hours', 'updated_at'])
+
+
+def _check_overlap(schedule, new_start, new_end):
+    """Ellenőrzi, hogy az új idősáv nem ütközik-e más beosztással
+    vagy tiltott időszakkal. Visszaad (ok: bool, error_msg: str|None)."""
+    overlapping_schedules = WorkSchedule.objects.filter(
+        start_datetime__lt=new_end,
+        end_datetime__gt=new_start,
+    ).exclude(id=schedule.id)
+
+    if overlapping_schedules.exists():
+        return False, 'Az idősáv ütközik egy másik beosztással.'
+
+    overlapping_timeoffs = TimeOff.objects.filter(
+        start_datetime__lt=new_end,
+        end_datetime__gt=new_start,
+    )
+
+    if overlapping_timeoffs.exists():
+        return False, 'Az idősáv tiltott időszakba esik.'
+
+    return True, None
 
 
 # ============================================================

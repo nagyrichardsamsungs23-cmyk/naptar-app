@@ -5,8 +5,9 @@ Minden napra külön beállítható munkaidő-ablakkal, ebédszünet nélkül.
 """
 
 from datetime import datetime, timedelta, date, time
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from django.utils import timezone
+from django.db.models import Sum
 from .models import Job, WorkSchedule, TimeOff, Settings, DayOverride
 
 
@@ -153,7 +154,14 @@ def schedule_job(job):
     """
     settings = Settings.load()
     
-    required_minutes = float(job.estimated_hours) * 60
+    # Meglévő kézi (nem automatikus) beosztások összesítése
+    manual = WorkSchedule.objects.filter(
+        job=job, is_auto_scheduled=False
+    ).aggregate(total=Sum('hours'))['total'] or 0
+    manual_minutes = float(manual) * 60
+    
+    # Csak a manuálisan be NEM osztott órákat kell automatikusan beosztani
+    required_minutes = max(0, float(job.estimated_hours) * 60 - manual_minutes)
     
     # Töröljük a korábbi automatikus beosztásokat
     WorkSchedule.objects.filter(job=job, is_auto_scheduled=True).delete()
@@ -172,12 +180,12 @@ def schedule_job(job):
     
     created_blocks = []
     remaining_minutes = required_minutes
+    min_block = float(settings.min_schedule_block_hours) * 60
     
     for slot_start, slot_end, slot_minutes in available_slots:
         if remaining_minutes <= 0:
             break
         
-        min_block = float(settings.min_schedule_block_hours) * 60
         if slot_minutes < min_block:
             continue
         
@@ -205,34 +213,38 @@ def schedule_job(job):
         remaining_minutes -= used_minutes
     
     # Hátralévő órák frissítése
-    scheduled_hours = (required_minutes - remaining_minutes) / 60
-    job.remaining_hours = max(0, float(job.estimated_hours) - scheduled_hours)
+    auto_hours = (required_minutes - remaining_minutes) / 60
+    total_scheduled = float(manual) + auto_hours
+    job.remaining_hours = max(0, float(job.estimated_hours) - total_scheduled)
     
-    if remaining_minutes > 0:
-        missing_hours = round(remaining_minutes / 60, 1)
-        job.status = 'draft'
+    if remaining_minutes > 0 and job.remaining_hours > 0:
+        missing_hours = round(job.remaining_hours, 1)
+        # Csak akkor draft, ha tényleg van még be nem osztott óra
+        if job.status not in ('in_progress', 'completed'):
+            job.status = 'draft'
         job.save()
         return {
             'success': False,
             'created_blocks': created_blocks,
-            'scheduled_hours': round(scheduled_hours, 1),
+            'scheduled_hours': round(auto_hours, 1),
             'missing_hours': missing_hours,
             'message': (
                 f"A munkához {job.estimated_hours} óra kell. "
-                f"A megadott határidőig csak {scheduled_hours} óra szabad. "
+                f"A megadott határidőig csak {total_scheduled:.1f} óra szabad. "
                 f"Hiányzó idő: {missing_hours} óra."
             )
         }
     
-    # Sikeres beosztás
-    job.status = 'planned'
-    job.remaining_hours = 0
+    # Sikeres beosztás (vagy a kézi + automatikus együtt lefedi)
+    if job.status not in ('in_progress', 'completed', 'cancelled'):
+        job.status = 'planned'
+    job.remaining_hours = max(0, float(job.estimated_hours) - total_scheduled)
     job.save()
     
     return {
         'success': True,
         'created_blocks': created_blocks,
-        'scheduled_hours': round(scheduled_hours, 1),
+        'scheduled_hours': round(auto_hours, 1),
         'missing_hours': 0,
         'message': f"A {job.estimated_hours} órás munka beosztása sikeres! {len(created_blocks)} blokkban."
     }

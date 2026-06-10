@@ -130,6 +130,11 @@ class WorkSchedule(models.Model):
         """Mentés előtt automatikusan számoljuk az órákat."""
         if self.start_datetime and self.end_datetime:
             delta = self.end_datetime - self.start_datetime
+            if delta.total_seconds() <= 0:
+                raise ValueError(
+                    f"A befejezés ({self.end_datetime}) nem lehet a kezdés "
+                    f"({self.start_datetime}) előtt vagy azzal egyenlő."
+                )
             self.hours = round(delta.total_seconds() / 3600, 1)
         super().save(*args, **kwargs)
 
