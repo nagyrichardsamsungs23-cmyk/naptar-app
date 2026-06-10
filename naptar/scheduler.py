@@ -171,9 +171,14 @@ def schedule_job(job):
     # Töröljük a korábbi automatikus beosztásokat
     WorkSchedule.objects.filter(job=job, is_auto_scheduled=True).delete()
     
-    # Kezdő dátum meghatározása
+    # Kezdő dátum meghatározása (biztosítjuk, hogy date objektum legyen)
     from_date = job.earliest_start_date if job.earliest_start_date else date.today()
-    to_date = job.deadline if job.deadline else from_date + timedelta(days=90)
+    if isinstance(from_date, str):
+        from_date = date.fromisoformat(from_date)
+    deadline = job.deadline
+    if isinstance(deadline, str):
+        deadline = date.fromisoformat(deadline) if deadline else None
+    to_date = deadline if deadline else from_date + timedelta(days=90)
     
     # Szabad idősávok lekérése
     available_slots = get_available_slots(from_date, to_date)
