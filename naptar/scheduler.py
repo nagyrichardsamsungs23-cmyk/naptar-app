@@ -7,7 +7,7 @@ Minden napra külön beállítható munkaidő-ablakkal, ebédszünet nélkül.
 from datetime import datetime, timedelta, date, time
 from decimal import Decimal, ROUND_HALF_UP
 from django.utils import timezone
-from .models import Job, WorkSchedule, TimeOff, Settings
+from .models import Job, WorkSchedule, TimeOff, Settings, DayOverride
 
 
 def get_available_slots(from_date, to_date):
@@ -29,8 +29,17 @@ def get_available_slots(from_date, to_date):
     current_date = from_date
     
     while current_date <= to_date:
-        # Naponkénti munkaidő lekérése
-        day_start, day_end = settings.get_day_hours(current_date)
+        # 1. Egyedi nap felülbírálás ellenőrzése
+        override = DayOverride.objects.filter(date=current_date).first()
+        if override:
+            if not override.is_workday or not override.start_time or not override.end_time:
+                current_date += timedelta(days=1)
+                continue
+            day_start = override.start_time
+            day_end = override.end_time
+        else:
+            # 2. Heti beállítás
+            day_start, day_end = settings.get_day_hours(current_date)
         
         if day_start is None or day_end is None:
             current_date += timedelta(days=1)

@@ -4,7 +4,7 @@ Django Admin regisztráció — magyar feliratokkal, kereséssel, szűréssel.
 
 from django.contrib import admin
 from django.utils import timezone
-from .models import Job, WorkSchedule, TimeOff, Settings
+from .models import Job, WorkSchedule, TimeOff, Settings, DayOverride
 
 
 class WorkScheduleInline(admin.TabularInline):
@@ -117,3 +117,11 @@ class SettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(DayOverride)
+class DayOverrideAdmin(admin.ModelAdmin):
+    list_display = ['date', 'is_workday', 'start_time', 'end_time', 'note']
+    list_filter = ['is_workday', 'date']
+    search_fields = ['note']
+    ordering = ['-date']

@@ -157,6 +157,78 @@
                             <i class="bi bi-check-lg me-1"></i>Beállítások mentése
                         </button>
                     </form>
+
+                    {# Egyedi napok #}
+                    <hr class="my-4">
+                    <h6 class="border-bottom pb-2 mb-3"><i class="bi bi-calendar-event me-1"></i>Egyedi napok</h6>
+                    <p class="text-muted small mb-3">Itt konkrét dátumokra állíthatsz be eltérő munkaidőt (pl. június 12-én 10:00–18:00). Felülírja a heti beállítást.</p>
+
+                    <form method="post" class="row g-2 mb-3 align-items-end">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_override">
+                        <div class="col-md-2">
+                            <label class="form-label small">Dátum</label>
+                            <input type="date" name="override_date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-1">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" name="override_workday" class="form-check-input" id="override_workday" checked>
+                                <label class="form-check-label small" for="override_workday">dolgozok</label>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Kezdés</label>
+                            <input type="time" name="override_start" class="form-control form-control-sm" value="08:00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Befejezés</label>
+                            <input type="time" name="override_end" class="form-control form-control-sm" value="16:00">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Megjegyzés</label>
+                            <input type="text" name="override_note" class="form-control form-control-sm" placeholder="Pl. rövidített nap">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+                                <i class="bi bi-plus-lg"></i> Hozzáad
+                            </button>
+                        </div>
+                    </form>
+
+                    {% if overrides %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead><tr><th>Dátum</th><th>Idő</th><th>Megjegyzés</th><th></th></tr></thead>
+                            <tbody>
+                            {% for o in overrides %}
+                            <tr>
+                                <td>{{ o.date|date:"Y-m-d" }} ({{ o.date|date:"l" }})</td>
+                                <td>
+                                    {% if o.is_workday and o.start_time and o.end_time %}
+                                        {{ o.start_time|time:"H:i" }}–{{ o.end_time|time:"H:i" }}
+                                    {% else %}
+                                        <span class="text-muted">szabadnap</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">{{ o.note }}</td>
+                                <td>
+                                    <form method="post" style="display:inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete_override">
+                                        <input type="hidden" name="override_id" value="{{ o.id }}">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Törlés">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted small">Nincsenek egyedi napok. Adj hozzá egyet fent.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>

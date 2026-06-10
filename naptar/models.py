@@ -152,6 +152,28 @@ class TimeOff(models.Model):
         return f"{self.title}: {self.start_datetime:%Y-%m-%d %H:%M} – {self.end_datetime:%H:%M}"
 
 
+class DayOverride(models.Model):
+    """
+    Egyedi nap felülbírálás — konkrét dátumra eltérő munkaidő.
+    Ha egy napra létezik DayOverride, a scheduler ezt használja a heti beállítás helyett.
+    """
+    date = models.DateField("Dátum", unique=True)
+    is_workday = models.BooleanField("Munkanap", default=True)
+    start_time = models.TimeField("Kezdés", null=True, blank=True)
+    end_time = models.TimeField("Befejezés", null=True, blank=True)
+    note = models.CharField("Megjegyzés", max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "Egyedi nap"
+        verbose_name_plural = "Egyedi napok"
+        ordering = ['date']
+
+    def __str__(self):
+        if self.is_workday and self.start_time and self.end_time:
+            return f"{self.date}: {self.start_time}–{self.end_time} ({self.note or 'munkanap'})"
+        return f"{self.date}: {'szabadnap' if not self.is_workday else 'munkanap'}"
+
+
 class Settings(models.Model):
     """
     Általános beállítások — egyetlen rekord.

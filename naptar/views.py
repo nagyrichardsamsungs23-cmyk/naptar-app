@@ -14,7 +14,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.db.models import Sum
 from decimal import Decimal
 
-from .models import Job, WorkSchedule, TimeOff, Settings
+from .models import Job, WorkSchedule, TimeOff, Settings, DayOverride
 from .scheduler import schedule_job, get_free_slots_summary
 
 
@@ -420,7 +420,36 @@ def settings_view(request):
     settings_obj = Settings.load()
     
     if request.method == 'POST':
-        # Naponkénti munkaidők
+        action = request.POST.get('action', '')
+        
+        # Egyedi nap törlése
+        if action == 'delete_override':
+            override_id = request.POST.get('override_id')
+            DayOverride.objects.filter(id=override_id).delete()
+            return redirect('settings')
+        
+        # Egyedi nap hozzáadása
+        if action == 'add_override':
+            override_date = request.POST.get('override_date', '')
+            is_workday = request.POST.get('override_workday') == 'on'
+            start_time = request.POST.get('override_start', '') or None
+            end_time = request.POST.get('override_end', '') or None
+            note = request.POST.get('override_note', '')
+            
+            if override_date:
+                # Meglévő frissítése vagy új létrehozása
+                override, _ = DayOverride.objects.update_or_create(
+                    date=override_date,
+                    defaults={
+                        'is_workday': is_workday,
+                        'start_time': start_time,
+                        'end_time': end_time,
+                        'note': note,
+                    }
+                )
+            return redirect('settings')
+        
+        # Heti beállítások mentése
         for day in ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']:
             setattr(settings_obj, f'{day}_active', request.POST.get(f'{day}_active') == 'on')
             start_val = request.POST.get(f'{day}_start', '')
@@ -430,14 +459,19 @@ def settings_view(request):
             if end_val:
                 setattr(settings_obj, f'{day}_end', end_val)
         
-        # Korlátozások
         settings_obj.max_daily_hours = Decimal(request.POST.get('max_daily_hours', '10') or '10')
         settings_obj.min_schedule_block_hours = Decimal(request.POST.get('min_schedule_block_hours', '0.5') or '0.5')
         
         settings_obj.save()
         return redirect('settings')
     
+    # Egyedi napok listája (következő 60 nap)
+    overrides = DayOverride.objects.filter(
+        date__gte=date.today()
+    ).order_by('date')[:90]
+    
     return render(request, 'naptar/settings.html', {
         'page': 'settings',
         'settings': settings_obj,
+        'overrides': overrides,
     })
