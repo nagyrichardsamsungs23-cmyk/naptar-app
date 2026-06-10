@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtuális környezet
+.venv/
+venv/
+env/
+
+# Django
+*.log
+db.sqlite3
+/media/
+/staticfiles/
+
+# Környezeti változók
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

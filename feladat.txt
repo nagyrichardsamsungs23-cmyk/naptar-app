@@ -1,0 +1,775 @@
+Igen, teljesen érthető volt. Amit szeretnél, az nem sima naptár app, hanem **építőipari munkatervező naptár munkaóra-alapú automatikus beosztással**.
+
+A jó irány szerintem ez:
+
+## 1. Rövid koncepció
+
+Az appban lesz:
+
+1. **Naptár nézet**
+   Alapból ezt látja a felhasználó.
+
+2. **Admin felület**
+   Itt tudsz:
+
+   * új munkát felvinni,
+   * munkaórát megadni,
+   * helyszínt megadni,
+   * kezdési és határidőt beállítani,
+   * munkát törölni,
+   * meglévő beosztást módosítani.
+
+3. **Munkaóra-tervező motor**
+   Ez nézi meg, hogy van-e elég szabad időd.
+   Ha igen, beteszi a munkát.
+   Ha nincs egyben elég idő, feldarabolja több napra.
+
+Példa:
+
+Van egy munka: **32 óra**.
+
+A naptárban szabad:
+
+* hétfő: 6 óra
+* kedd: 8 óra
+* szerda: 4 óra
+* csütörtök: 8 óra
+* péntek: 6 óra
+
+Összesen: 32 óra.
+
+Az app automatikusan beosztja:
+
+* hétfő: 6 óra
+* kedd: 8 óra
+* szerda: 4 óra
+* csütörtök: 8 óra
+* péntek: 6 óra
+
+## 2. Javasolt tech stack
+
+Mivel HTML, CSS, JavaScript és Python irányban gondolkodsz, én ezt javaslom:
+
+### Backend
+
+**Django**
+
+Ez lenne a legjobb választás neked, mert kapsz hozzá kész admin felületet, felhasználókezelést, jogosultságot, adatbázis-kezelést és gyors fejlesztési alapot. A Django admin hivatalosan belső menedzsment felületre való, tehát pontosan jó arra, hogy te admin oldalon munkákat vigyél fel, szerkessz vagy törölj. ([Django Project][1])
+
+Alternatíva lehetne a FastAPI is, de ott az admin felületet külön kellene felépíteni. A FastAPI erős API-khoz, gyors, modern Python keretrendszer, de ehhez a projekthez a Django praktikusabb. ([fastapi.tiangolo.com][2])
+
+**Ajánlás:**
+
+```text
+Python + Django
+```
+
+### Adatbázis
+
+**PostgreSQL**
+
+Kezdéshez SQLite is elég lehet, de éles használatra PostgreSQL-t javaslok. A naptár appban sok dátum, időpont, átfedés és idősáv lesz. A PostgreSQL jól kezeli a dátum és idő típusokat, sőt időintervallum típusai is vannak, például `tstzrange`, ami időtartományokhoz hasznos. ([PostgreSQL][3])
+
+**Ajánlás:**
+
+```text
+Fejlesztés: SQLite
+Éles használat: PostgreSQL
+```
+
+### Frontend
+
+**HTML + CSS + JavaScript + FullCalendar**
+
+A naptár nézethez a FullCalendar lenne a legjobb. Tud havi, heti, napi nézetet, eseményeket, húzásos mozgatást, átméretezést és külső események naptárba dobását is. ([fullcalendar.io][4])
+
+**Ajánlás:**
+
+```text
+HTML
+CSS vagy Tailwind CSS
+Vanilla JavaScript
+FullCalendar
+```
+
+Ha több dolgozót, brigádot vagy gépet is szeretnél később kezelni, akkor a FullCalendar resource/timeline funkciói hasznosak lehetnek, de ezek egy része prémium funkció. ([fullcalendar.io][4])
+
+### Dinamikus admin oldalakhoz
+
+**HTMX vagy sima JavaScript**
+
+Ha nem akarsz Reactet vagy Vue-t, akkor a HTMX jó választás. HTML attribútumokkal tud AJAX-kéréseket, részleges oldalfrissítést és modernebb interakciókat kezelni. ([htmx.org][5])
+
+**Ajánlás:**
+
+```text
+HTMX + kevés JavaScript
+```
+
+### Automatikus beosztó algoritmus
+
+Kezdéshez saját Python algoritmus elég.
+
+Később, ha bonyolultabb lesz, például:
+
+* több brigád,
+* több helyszín,
+* utazási idő,
+* prioritás,
+* határidő,
+* gépek foglaltsága,
+* párhuzamos munkák,
+
+akkor érdemes lehet Google OR-Tools-t használni. Az OR-Tools CP-SAT modulja alkalmas ütemezési és korlátozásos optimalizálási feladatokra. ([Google for Developers][6])
+
+**Ajánlás MVP-re:**
+
+```text
+Saját Python greedy scheduling algoritmus
+```
+
+**Ajánlás későbbre:**
+
+```text
+Google OR-Tools
+```
+
+## 3. Végleges javasolt stack
+
+```text
+Backend: Python + Django
+Admin: Django Admin + saját admin oldalak
+Frontend: HTML + CSS + JavaScript
+Naptár: FullCalendar
+Dinamikus elemek: HTMX vagy Vanilla JavaScript
+Adatbázis: PostgreSQL
+Dátumkezelés: Python datetime + Django timezone
+Beosztó motor: saját Python algoritmus
+Későbbi optimalizálás: Google OR-Tools
+Deployment: Docker + VPS
+```
+
+## 4. Alap adatbázis-terv
+
+### User
+
+Ha csak te használod, akkor elég egy admin user.
+
+Mezők:
+
+```text
+id
+username
+email
+password
+is_admin
+```
+
+### Job, vagyis munka
+
+Ez maga a projekt vagy munka.
+
+```text
+id
+title
+description
+client_name
+location
+estimated_hours
+remaining_hours
+deadline
+earliest_start_date
+priority
+status
+created_at
+updated_at
+```
+
+Példa:
+
+```text
+title: Fürdőszoba burkolás
+location: Budapest, XIII. kerület
+estimated_hours: 32
+deadline: 2026-07-10
+priority: high
+status: planned
+```
+
+### WorkSchedule, vagyis naptárba tett munkaidő
+
+Ez tárolja, hogy az adott munkából mikor mennyit végzel.
+
+```text
+id
+job_id
+start_datetime
+end_datetime
+hours
+note
+is_auto_scheduled
+created_at
+updated_at
+```
+
+Példa:
+
+```text
+job_id: 5
+start_datetime: 2026-06-15 08:00
+end_datetime: 2026-06-15 16:00
+hours: 8
+```
+
+### Availability, vagyis elérhető munkaidő
+
+Itt állítod be, hogy mikor dolgozol általában.
+
+```text
+id
+weekday
+start_time
+end_time
+is_active
+```
+
+Példa:
+
+```text
+Monday: 08:00 - 16:00
+Tuesday: 08:00 - 16:00
+Wednesday: 08:00 - 16:00
+```
+
+### TimeOff, vagyis tiltott időszak
+
+Szabadság, magánprogram, esős nap, ünnepnap, vagy bármi, amikor nem dolgozol.
+
+```text
+id
+title
+start_datetime
+end_datetime
+reason
+```
+
+### Settings
+
+Általános beállítások.
+
+```text
+id
+workday_start
+workday_end
+lunch_break_start
+lunch_break_end
+default_daily_hours
+min_schedule_block_hours
+travel_buffer_minutes
+```
+
+## 5. Beosztási logika
+
+Az app így működjön:
+
+### 1. Beírod a munkát
+
+Például:
+
+```text
+Munka: Tetőjavítás
+Munkaóra: 24 óra
+Helyszín: Pécs
+Kezdhető: 2026-06-17
+Határidő: 2026-06-25
+```
+
+### 2. Az app lekéri a szabad idősávokat
+
+Megnézi:
+
+* mely napokon dolgozol,
+* hol van már beírt munka,
+* van-e szabadság vagy tiltott idősáv,
+* van-e ebédszünet,
+* van-e napi maximum munkaóra.
+
+### 3. Az app kiszámolja az összes szabad órát
+
+Példa:
+
+```text
+2026-06-17: 4 óra szabad
+2026-06-18: 8 óra szabad
+2026-06-19: 8 óra szabad
+2026-06-22: 4 óra szabad
+```
+
+Összesen: 24 óra.
+
+### 4. Ha elég az idő, beosztja
+
+Létrehoz több WorkSchedule rekordot.
+
+### 5. Ha nem elég az idő, figyelmeztet
+
+Példa:
+
+```text
+A munkához 24 óra kell.
+A megadott határidőig csak 18 óra szabad.
+Hiányzó idő: 6 óra.
+```
+
+Ezután az admin dönthet:
+
+* hosszabbít határidőt,
+* hétvégét is engedélyez,
+* növeli a napi munkaórát,
+* manuálisan átszervez.
+
+## 6. Egyszerű beosztó algoritmus
+
+A másik AI-nak ezt add meg logikaként:
+
+```python
+def schedule_job(job, available_slots):
+    required_minutes = job.estimated_hours * 60
+    created_blocks = []
+
+    for slot in available_slots:
+        if required_minutes <= 0:
+            break
+
+        slot_minutes = minutes_between(slot.start, slot.end)
+
+        if slot_minutes <= 0:
+            continue
+
+        used_minutes = min(required_minutes, slot_minutes)
+
+        block = {
+            "job_id": job.id,
+            "start": slot.start,
+            "end": slot.start + used_minutes,
+            "minutes": used_minutes
+        }
+
+        created_blocks.append(block)
+        required_minutes -= used_minutes
+
+    if required_minutes > 0:
+        return {
+            "success": False,
+            "missing_minutes": required_minutes,
+            "created_blocks": created_blocks
+        }
+
+    return {
+        "success": True,
+        "created_blocks": created_blocks
+    }
+```
+
+## 7. Fontos szabályok az algoritmushoz
+
+Ezeket már az elején építsétek bele:
+
+```text
+1. Egy munka több napra is szétbontható.
+2. Egy napra maximum X munkaóra kerülhet.
+3. A rendszer ne írjon felül meglévő munkát.
+4. A rendszer vegye figyelembe a tiltott időszakokat.
+5. A rendszer vegye figyelembe az ebédszünetet.
+6. A munka csak earliest_start_date után kezdődhet.
+7. A munka lehetőleg deadline előtt fejeződjön be.
+8. Ha nincs elég idő, ne ossza be hibásan, hanem jelezzen.
+9. Admin tudja kézzel módosítani a beosztást.
+10. Módosítás után a rendszer számolja újra a maradék órát.
+```
+
+## 8. Fő oldalak
+
+### Publikus vagy alap naptár oldal
+
+URL:
+
+```text
+/calendar/
+```
+
+Funkciók:
+
+```text
+- havi nézet
+- heti nézet
+- napi nézet
+- munkák színezése
+- helyszín megjelenítése
+- kattintásra részletek
+```
+
+### Admin dashboard
+
+URL:
+
+```text
+/dashboard/
+```
+
+Funkciók:
+
+```text
+- összes aktív munka
+- ma esedékes munka
+- heti terhelés
+- szabad órák száma
+- határidős munkák
+```
+
+### Munka létrehozása
+
+URL:
+
+```text
+/jobs/create/
+```
+
+Mezők:
+
+```text
+- munka neve
+- ügyfél neve
+- helyszín
+- becsült munkaóra
+- kezdhető dátum
+- határidő
+- prioritás
+- automatikus beosztás igen/nem
+```
+
+### Munka szerkesztése
+
+URL:
+
+```text
+/jobs/<id>/edit/
+```
+
+Funkciók:
+
+```text
+- munkaóra módosítása
+- határidő módosítása
+- helyszín módosítása
+- újratervezés gomb
+- törlés
+```
+
+### Beállítások
+
+URL:
+
+```text
+/settings/
+```
+
+Mezők:
+
+```text
+- munkanap kezdete
+- munkanap vége
+- ebédszünet
+- hétvégi munka engedélyezése
+- napi maximum óra
+- minimum beosztható blokk
+```
+
+## 9. API végpontok
+
+FullCalendar miatt kell pár JSON endpoint.
+
+```text
+GET /api/events/
+```
+
+Visszaadja a naptár eseményeit.
+
+```text
+POST /api/jobs/
+```
+
+Új munka létrehozása.
+
+```text
+POST /api/jobs/<id>/schedule/
+```
+
+Automatikus beosztás indítása.
+
+```text
+POST /api/events/<id>/move/
+```
+
+Naptárban húzott esemény mentése.
+
+```text
+POST /api/events/<id>/resize/
+```
+
+Időtartam módosítása.
+
+```text
+DELETE /api/events/<id>/
+```
+
+Esemény törlése.
+
+```text
+GET /api/free-slots/
+```
+
+Szabad idősávok lekérése.
+
+## 10. Naptár esemény színek
+
+Javaslat:
+
+```text
+Kék: tervezett munka
+Zöld: elvégzett munka
+Narancs: folyamatban
+Piros: határidős vagy csúszásban lévő munka
+Szürke: tiltott időszak
+Lila: manuálisan rögzített esemény
+```
+
+## 11. Munka státuszok
+
+```text
+draft
+planned
+in_progress
+completed
+cancelled
+overdue
+```
+
+Magyarul:
+
+```text
+Vázlat
+Beosztva
+Folyamatban
+Kész
+Törölve
+Késésben
+```
+
+## 12. MVP verzió
+
+Első verzióban ezt érdemes megcsinálni:
+
+```text
+1. Bejelentkezés
+2. Django admin
+3. Munka létrehozása
+4. Munkaóra megadása
+5. Heti és havi naptár
+6. Szabad idősávok számítása
+7. Automatikus beosztás
+8. Munka törlése
+9. Munka manuális mozgatása a naptárban
+10. Egyszerű státuszkezelés
+```
+
+Ezt ne bonyolítsátok túl az elején.
+
+## 13. Második verzió
+
+Később jöhet:
+
+```text
+1. Ügyfélkezelés
+2. Árajánlat kapcsolása a munkához
+3. Munkadíj kalkulátor beépítése
+4. PDF ajánlat generálás
+5. Google Calendar szinkron
+6. E-mail értesítés
+7. SMS vagy WhatsApp emlékeztető
+8. Több dolgozó vagy brigád kezelése
+9. Helyszínek közötti utazási idő
+10. Automatikus újratervezés csúszás esetén
+```
+
+## 14. A munkadíj kalkulátor bekötése
+
+Három jó megoldás van.
+
+### A megoldás: kalkulátor ugyanebben az appban
+
+Ez a legjobb.
+
+A kalkulátor kiszámolja:
+
+```text
+anyagköltség
+munkadíj
+munkaóra
+végösszeg
+```
+
+Majd a `estimated_hours` mezőt automatikusan kitölti.
+
+### B megoldás: külön kalkulátor, API-n keresztül
+
+Ha a kalkulátor már külön projektben van, akkor legyen egy API:
+
+```text
+POST /api/calculate-labor/
+```
+
+Válasz:
+
+```json
+{
+  "estimated_hours": 32,
+  "labor_cost": 280000,
+  "total_price": 450000
+}
+```
+
+### C megoldás: manuális beírás
+
+Kezdéshez ez is elég.
+
+Az admin csak beírja:
+
+```text
+Munkaóra: 32
+```
+
+Majd a naptár beosztja.
+
+## 15. Javasolt projektstruktúra
+
+```text
+calendar_app/
+│
+├── manage.py
+├── requirements.txt
+├── .env
+│
+├── config/
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+│
+├── accounts/
+│   ├── models.py
+│   ├── views.py
+│   └── urls.py
+│
+├── jobs/
+│   ├── models.py
+│   ├── admin.py
+│   ├── views.py
+│   ├── services.py
+│   ├── scheduler.py
+│   └── urls.py
+│
+├── calendar_view/
+│   ├── views.py
+│   ├── api.py
+│   └── urls.py
+│
+├── templates/
+│   ├── base.html
+│   ├── calendar.html
+│   ├── dashboard.html
+│   ├── job_form.html
+│   └── settings.html
+│
+└── static/
+    ├── css/
+    ├── js/
+    └── images/
+```
+
+## 16. Fejlesztési sorrend
+
+Ezt add a másik AI-nak sorrendként:
+
+```text
+1. Django projekt létrehozása.
+2. User login beállítása.
+3. Job model létrehozása.
+4. WorkSchedule model létrehozása.
+5. Availability model létrehozása.
+6. Django admin regisztráció.
+7. FullCalendar beépítése.
+8. API események lekéréséhez.
+9. Munka létrehozó oldal.
+10. Szabad idősáv számítás.
+11. Automatikus beosztó algoritmus.
+12. Drag and drop mentés FullCalendarból.
+13. Törlés és módosítás.
+14. Státuszkezelés.
+15. Dashboard.
+16. Tesztelés valós példákkal.
+```
+
+## 17. Rövid fejlesztői brief a másik AI-nak
+
+Ezt egy az egyben odaadhatod:
+
+```text
+Készíts egy Django alapú webappot HTML, CSS, JavaScript és Python használatával.
+
+Az app célja egy építőipari munkaidő-tervező naptár létrehozása.
+
+A rendszerben legyen admin felület, ahol munkákat lehet létrehozni, szerkeszteni és törölni. Minden munkához lehessen megadni címet, ügyfelet, helyszínt, becsült munkaórát, kezdhető dátumot, határidőt, prioritást és státuszt.
+
+A frontend naptárhoz FullCalendar könyvtárat használj. A naptár havi, heti és napi nézetet tudjon. Az eseményeket lehessen mozgatni és átméretezni. A módosításokat AJAX vagy fetch API segítségével mentse vissza a Django backendbe.
+
+Készíts automatikus beosztó algoritmust Pythonban. Az algoritmus vegye figyelembe az elérhető munkaidőt, a meglévő naptáreseményeket, a tiltott időszakokat, a napi maximum munkaórát, a kezdhető dátumot és a határidőt. Ha a munkaóra egy napra nem fér be, bontsa több napra. Ha nincs elég szabad idő, adjon vissza hibaüzenetet a hiányzó óraszámmal.
+
+Használj Django modelleket: Job, WorkSchedule, Availability, TimeOff és Settings.
+
+A fő nézet legyen a naptár. Az admin vagy dashboard nézetben lehessen új munkát felvinni, automatikusan beosztani, módosítani és törölni.
+
+Kezdéshez SQLite adatbázist használj, de úgy építsd fel, hogy később PostgreSQL-re át lehessen állni.
+```
+
+## 18. Végső ajánlás
+
+Én így építeném:
+
+```text
+Django monolit app
+FullCalendar naptár frontend
+PostgreSQL adatbázis
+Saját Python scheduling algoritmus
+Django Admin belső adminisztrációra
+Saját dashboard a munkatervezéshez
+```
+
+Ez illik a meglévő Python projektjeidhez, nem túl bonyolult, és később jól bővíthető.
+
+[1]: https://docs.djangoproject.com/en/6.0/ref/contrib/admin/ "The Django admin site | Django documentation | Django"
+[2]: https://fastapi.tiangolo.com/ "FastAPI - FastAPI"
+[3]: https://www.postgresql.org/docs/current/rangetypes.html?utm_source=chatgpt.com "Documentation: 18: 8.17. Range Types"
+[4]: https://fullcalendar.io/docs "
+  
+    
+      Documentation
+    
+    
+      
+    
+  
+  \| FullCalendar 
+"
+[5]: https://htmx.org/ "</> htmx - high power tools for html"
+[6]: https://developers.google.com/optimization/cp/cp_solver?utm_source=chatgpt.com "CP-SAT Solver | OR-Tools"
+

@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}{% if job %}Szerkesztés: {{ job.title }}{% else %}Új munka{% endif %} — Naptár{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        {% if job %}
+                        <i class="bi bi-pencil-square me-1"></i>{{ job.title }} szerkesztése
+                        {% else %}
+                        <i class="bi bi-plus-circle me-1"></i>Új munka létrehozása
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="jobForm">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Munka neve *</label>
+                            <input type="text" name="title" class="form-control" required
+                                   value="{{ job.title|default:'' }}"
+                                   placeholder="Pl. Fürdőszoba burkolás">
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Ügyfél neve</label>
+                                <input type="text" name="client_name" class="form-control"
+                                       value="{{ job.client_name|default:'' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Helyszín</label>
+                                <input type="text" name="location" class="form-control"
+                                       value="{{ job.location|default:'' }}"
+                                       placeholder="Pl. Budapest, XIII. kerület">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Leírás</label>
+                            <textarea name="description" class="form-control" rows="3">{{ job.description|default:'' }}</textarea>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Becsült munkaóra *</label>
+                                <input type="number" name="estimated_hours" class="form-control" required
+                                       step="0.5" min="0.5" max="999"
+                                       value="{{ job.estimated_hours|default:'' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Kezdhető dátum</label>
+                                <input type="date" name="earliest_start_date" class="form-control"
+                                       value="{{ job.earliest_start_date|date:'Y-m-d'|default:'' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Határidő</label>
+                                <input type="date" name="deadline" class="form-control"
+                                       value="{{ job.deadline|date:'Y-m-d'|default:'' }}">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Prioritás</label>
+                                <select name="priority" class="form-select">
+                                    {% for key, label in priorities %}
+                                    <option value="{{ key }}" {% if job and job.priority == key %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% if job %}
+                            <div class="col-md-6">
+                                <label class="form-label">Státusz</label>
+                                <select name="status" class="form-select">
+                                    {% for key, label in statuses %}
+                                    <option value="{{ key }}" {% if job.status == key %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {% if not job %}
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" name="auto_schedule" value="yes"
+                                   class="form-check-input" id="autoSchedule" checked>
+                            <label class="form-check-label" for="autoSchedule">
+                                Automatikus beosztás a szabad idősávokba
+                            </label>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg me-1"></i>
+                                {% if job %}Mentés{% else %}Létrehozás{% endif %}
+                            </button>
+                            <a href="{% url 'calendar' %}" class="btn btn-outline-secondary">Mégsem</a>
+
+                            {% if job %}
+                            <a href="{% url 'job_delete' job.id %}" class="btn btn-outline-danger ms-auto">
+                                <i class="bi bi-trash"></i> Törlés
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+
+                    {% if job %}
+                    <hr class="my-4">
+                    <div class="d-flex gap-2 align-items-center">
+                        <strong>Beosztás:</strong>
+                        <span class="badge bg-info">{{ job.scheduled_hours|floatformat:1 }} / {{ job.estimated_hours }} óra beosztva</span>
+                        {% if job.remaining_hours > 0 or job.status != 'completed' %}
+                        <button class="btn btn-warning btn-sm" onclick="rescheduleJob({{ job.id }})">
+                            <i class="bi bi-arrow-repeat me-1"></i>Újratervezés
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if job %}
+<script>
+function getCSRFToken() {
+    const name = 'csrftoken';
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+        c = c.trim();
+        if (c.startsWith(name + '=')) return c.substring(name.length + 1);
+    }
+    return '';
+}
+
+function rescheduleJob(jobId) {
+    if (!confirm('Ez törli a meglévő automatikus beosztásokat és újraosztja a munkát. Folytatod?')) return;
+
+    fetch('/jobs/' + jobId + '/reschedule/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCSRFToken()}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ ' + data.message);
+        } else {
+            alert('⚠️ ' + data.message);
+        }
+        location.reload();
+    })
+    .catch(err => alert('Hiba: ' + err));
+}
+</script>
+{% endif %}
+{% endblock %}

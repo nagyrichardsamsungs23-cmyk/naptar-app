@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Beállítások — Naptár{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear-fill me-1"></i>Beállítások</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <h6 class="border-bottom pb-2 mb-3">Munkaidő keretek</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Munkanap kezdete</label>
+                                <input type="time" name="workday_start" class="form-control"
+                                       value="{{ settings.workday_start|time:'H:i' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Munkanap vége</label>
+                                <input type="time" name="workday_end" class="form-control"
+                                       value="{{ settings.workday_end|time:'H:i' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Alap napi óra</label>
+                                <input type="number" name="default_daily_hours" class="form-control"
+                                       step="0.5" min="1" max="16"
+                                       value="{{ settings.default_daily_hours }}">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Maximum napi óra</label>
+                                <input type="number" name="max_daily_hours" class="form-control"
+                                       step="0.5" min="1" max="16"
+                                       value="{{ settings.max_daily_hours }}">
+                                <small class="text-muted">Ennél többet nem oszt be a rendszer egy napra.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Min. beosztható blokk (óra)</label>
+                                <input type="number" name="min_schedule_block_hours" class="form-control"
+                                       step="0.5" min="0.5" max="4"
+                                       value="{{ settings.min_schedule_block_hours }}">
+                            </div>
+                        </div>
+
+                        <h6 class="border-bottom pb-2 mb-3">Ebédszünet</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Ebédszünet kezdete</label>
+                                <input type="time" name="lunch_break_start" class="form-control"
+                                       value="{{ settings.lunch_break_start|time:'H:i' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Ebédszünet vége</label>
+                                <input type="time" name="lunch_break_end" class="form-control"
+                                       value="{{ settings.lunch_break_end|time:'H:i' }}">
+                            </div>
+                        </div>
+
+                        <h6 class="border-bottom pb-2 mb-3">Munkanapok</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="mon_active" class="form-check-input" id="mon_active" {% if settings.mon_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="mon_active">Hétfő</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="tue_active" class="form-check-input" id="tue_active" {% if settings.tue_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="tue_active">Kedd</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="wed_active" class="form-check-input" id="wed_active" {% if settings.wed_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="wed_active">Szerda</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="thu_active" class="form-check-input" id="thu_active" {% if settings.thu_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="thu_active">Csütörtök</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="fri_active" class="form-check-input" id="fri_active" {% if settings.fri_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="fri_active">Péntek</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="sat_active" class="form-check-input" id="sat_active" {% if settings.sat_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="sat_active">Szombat</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" name="sun_active" class="form-check-input" id="sun_active" {% if settings.sun_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="sun_active">Vasárnap</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6 class="border-bottom pb-2 mb-3">Egyéb</h6>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" name="allow_weekend" class="form-check-input"
+                                   id="allowWeekend" {% if settings.allow_weekend %}checked{% endif %}>
+                            <label class="form-check-label" for="allowWeekend">
+                                Hétvégi munka engedélyezése
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>Beállítások mentése
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

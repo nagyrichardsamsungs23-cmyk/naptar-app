@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Naptár{% endblock %}
+
+{% block extra_head %}
+{# FullCalendar CSS + JS #}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row">
+        {# Bal oldalsáv — munkák listája #}
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <strong><i class="bi bi-list-check me-1"></i>Munkák</strong>
+                    <a href="{% url 'job_create' %}" class="btn btn-light btn-sm">
+                        <i class="bi bi-plus-lg"></i>
+                    </a>
+                </div>
+                <div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;">
+                    {% if jobs %}
+                    <div class="list-group list-group-flush">
+                        {% for job in jobs %}
+                        <div class="list-group-item py-2 px-3 job-list-item"
+                             data-job-id="{{ job.id }}"
+                             style="cursor: pointer;">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge-status" style="background: {{ job.status|lower }};"></span>
+                                    <strong class="ms-1">{{ job.title|truncatechars:25 }}</strong>
+                                </div>
+                                <small class="text-muted">{{ job.estimated_hours }}ó</small>
+                            </div>
+                            {% if job.client_name %}
+                            <small class="text-muted">{{ job.client_name }}</small>
+                            {% endif %}
+                            {% if job.location %}
+                            <br><small class="text-muted"><i class="bi bi-geo-alt"></i> {{ job.location|truncatechars:20 }}</small>
+                            {% endif %}
+                            <div class="mt-1 d-flex gap-2">
+                                <span class="badge bg-{{ job.priority|lower }}">{{ job.get_priority_display }}</span>
+                                <span class="badge bg-secondary">{{ job.get_status_display }}</span>
+                                {% if job.remaining_hours > 0 and job.status != 'completed' %}
+                                <span class="badge bg-warning text-dark">{{ job.remaining_hours }}ó hátra</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                        <p class="mt-2 mb-0">Nincsenek munkák.</p>
+                        <a href="{% url 'job_create' %}" class="btn btn-primary btn-sm mt-2">Új munka</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Jobb oldal — naptár #}
+        <div class="col-md-9">
+            <div class="card shadow-sm">
+                <div class="card-body p-2">
+                    <div id="calendar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Munka részletek modal #}
+<div class="modal fade" id="jobModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="jobModalTitle">Munka részletei</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="jobModalBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-danger btn-sm" id="btnDeleteEvent" style="display:none;">
+                    <i class="bi bi-trash"></i> Törlés
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bezárás</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// CSRF token kiolvasása
+function getCSRFToken() {
+    const name = 'csrftoken';
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+        c = c.trim();
+        if (c.startsWith(name + '=')) return c.substring(name.length + 1);
+    }
+    return '';
+}
+
+// Naptár inicializálása
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        locale: 'hu',
+        firstDay: 1,
+        height: 'auto',
+        editable: true,
+        selectable: false,
+        events: '/api/events/',
+        eventTimeFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        },
+        buttonText: {
+            today: 'Ma',
+            month: 'Hónap',
+            week: 'Hét',
+            day: 'Nap'
+        },
+
+        // Esemény kattintás
+        eventClick: function(info) {
+            const props = info.event.extendedProps;
+
+            if (props.type === 'timeoff') {
+                // Tiltott időszak — csak megjelenítjük
+                document.getElementById('jobModalTitle').textContent = '⛔ ' + info.event.title;
+                document.getElementById('jobModalBody').innerHTML = `
+                    <p><strong>Időszak:</strong> ${info.event.start.toLocaleString('hu-HU')} – ${info.event.end.toLocaleString('hu-HU')}</p>
+                    ${props.reason ? `<p><strong>Ok:</strong> ${props.reason}</p>` : ''}
+                `;
+                document.getElementById('btnDeleteEvent').style.display = 'none';
+                new bootstrap.Modal(document.getElementById('jobModal')).show();
+                return;
+            }
+
+            // Beosztás (WorkSchedule)
+            const statusMap = {
+                'draft': 'Vázlat', 'planned': 'Beosztva', 'in_progress': 'Folyamatban',
+                'completed': 'Kész', 'cancelled': 'Törölve', 'overdue': 'Késésben'
+            };
+
+            document.getElementById('jobModalTitle').textContent = props.job_title;
+            document.getElementById('jobModalBody').innerHTML = `
+                <p><strong>Ügyfél:</strong> ${props.client || '—'}</p>
+                <p><strong>Helyszín:</strong> ${props.location || '—'}</p>
+                <p><strong>Időpont:</strong> ${info.event.start.toLocaleString('hu-HU')} – ${info.event.end.toLocaleString('hu-HU')}</p>
+                <p><strong>Óra:</strong> ${props.hours} óra</p>
+                <p><strong>Státusz:</strong> ${statusMap[props.status] || props.status}</p>
+                <p><strong>Típus:</strong> ${props.is_auto_scheduled ? '🤖 Automatikus' : '✋ Kézi'}</p>
+            `;
+
+            document.getElementById('btnDeleteEvent').style.display = 'inline-block';
+            document.getElementById('btnDeleteEvent').onclick = function() {
+                if (confirm('Biztosan törlöd ezt a beosztást?')) {
+                    fetch(`/api/events/${info.event.id}/delete/`, {
+                        method: 'POST',
+                        headers: {'X-CSRFToken': getCSRFToken()}
+                    }).then(r => r.json()).then(data => {
+                        if (data.success) {
+                            info.event.remove();
+                            bootstrap.Modal.getInstance(document.getElementById('jobModal')).hide();
+                        }
+                    });
+                }
+            };
+
+            new bootstrap.Modal(document.getElementById('jobModal')).show();
+        },
+
+        // Esemény mozgatása (drag & drop)
+        eventDrop: function(info) {
+            fetch(`/api/events/${info.event.id}/move/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    start: info.event.start.toISOString(),
+                    end: info.event.end ? info.event.end.toISOString() : null
+                })
+            }).then(r => r.json()).then(data => {
+                if (!data.success) {
+                    info.revert();
+                }
+            });
+        },
+
+        // Esemény átméretezése
+        eventResize: function(info) {
+            fetch(`/api/events/${info.event.id}/resize/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify({
+                    end: info.event.end.toISOString()
+                })
+            }).then(r => r.json()).then(data => {
+                if (!data.success) {
+                    info.revert();
+                }
+            });
+        }
+    });
+
+    calendar.render();
+
+    // Munka lista elemek kattintása — görgetés a naptárban
+    document.querySelectorAll('.job-list-item').forEach(item => {
+        item.addEventListener('click', function() {
+            // Átváltás a munkához tartozó eseményekre (opcionális)
+        });
+    });
+});
+</script>
+
+<style>
+/* Státusz badge színek */
+.badge-low { background-color: #6b7280; }
+.badge-medium { background-color: #3b82f6; }
+.badge-high { background-color: #f59e0b; }
+.badge-urgent { background-color: #ef4444; }
+
+.job-list-item:hover {
+    background-color: #f0f4ff;
+}
+
+/* FullCalendar testreszabás */
+.fc {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+}
+.fc-toolbar-title {
+    font-size: 1.25rem !important;
+    font-weight: 600;
+}
+.fc-event {
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 3px 6px !important;
+    font-size: 0.8rem;
+}
+.fc-day-today {
+    background-color: #eff6ff !important;
+}
+</style>
+{% endblock %}

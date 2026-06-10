@@ -1,0 +1,276 @@
+"""
+Naptár Alkalmazás — Automatikus Beosztó Motor
+==============================================
+A feladat.txt 5-7. pontja alapján.
+"""
+
+from datetime import datetime, timedelta, date, time
+from decimal import Decimal, ROUND_HALF_UP
+from django.utils import timezone
+from .models import Job, WorkSchedule, TimeOff, Settings
+
+
+def get_available_slots(from_date, to_date):
+    """
+    Visszaadja az összes szabad idősávot két dátum között.
+    
+    Figyelembe veszi:
+    - Beállítások (munkaidő, ebédszünet, munkanapok, max napi óra)
+    - Már meglévő beosztásokat (WorkSchedule)
+    - Tiltott időszakokat (TimeOff)
+    
+    Vissza: [(start_dt, end_dt, available_minutes), ...]
+    """
+    settings = Settings.load()
+    
+    # Munkaidő keretek
+    work_start = settings.workday_start
+    work_end = settings.workday_end
+    lunch_start = settings.lunch_break_start
+    lunch_end = settings.lunch_break_end
+    max_daily_minutes = int(float(settings.max_daily_hours) * 60)
+    
+    slots = []
+    current_date = from_date
+    
+    while current_date <= to_date:
+        # Csak munkanapokon
+        if not settings.is_workday(current_date):
+            current_date += timedelta(days=1)
+            continue
+        
+        # Aznapi munkaidő intervallum
+        day_start_dt = timezone.make_aware(
+            datetime.combine(current_date, work_start)
+        )
+        day_end_dt = timezone.make_aware(
+            datetime.combine(current_date, work_end)
+        )
+        
+        # Foglaltságok lekérése erre a napra
+        busy_periods = _get_busy_periods(current_date, settings)
+        
+        # Szabad blokkok kiszámítása a foglaltságok között
+        free_blocks = _calculate_free_blocks(
+            day_start_dt, day_end_dt, busy_periods,
+            lunch_start, lunch_end, max_daily_minutes
+        )
+        
+        slots.extend(free_blocks)
+        current_date += timedelta(days=1)
+    
+    return slots
+
+
+def _get_busy_periods(day_date, settings):
+    """
+    Összegyűjti egy nap összes foglalt időszakát.
+    Visszaad egy rendezett listát (start, end) tuple-ökből.
+    """
+    day_start = timezone.make_aware(datetime.combine(day_date, time.min))
+    day_end = timezone.make_aware(datetime.combine(day_date, time.max))
+    
+    busy = []
+    
+    # Meglévő beosztások
+    schedules = WorkSchedule.objects.filter(
+        start_datetime__gte=day_start,
+        start_datetime__lte=day_end
+    ).order_by('start_datetime')
+    
+    for s in schedules:
+        busy.append((s.start_datetime, s.end_datetime))
+    
+    # Tiltott időszakok
+    timeoffs = TimeOff.objects.filter(
+        start_datetime__lt=day_end,
+        end_datetime__gt=day_start
+    )
+    
+    for t in timeoffs:
+        # Csak aznapra eső rész
+        overlap_start = max(t.start_datetime, day_start)
+        overlap_end = min(t.end_datetime, day_end)
+        if overlap_start < overlap_end:
+            busy.append((overlap_start, overlap_end))
+    
+    # Ebédszünet hozzáadása
+    lunch_start_dt = timezone.make_aware(
+        datetime.combine(day_date, settings.lunch_break_start)
+    )
+    lunch_end_dt = timezone.make_aware(
+        datetime.combine(day_date, settings.lunch_break_end)
+    )
+    busy.append((lunch_start_dt, lunch_end_dt))
+    
+    # Rendezés kezdési idő szerint
+    busy.sort(key=lambda x: x[0])
+    
+    return busy
+
+
+def _calculate_free_blocks(day_start, day_end, busy_periods,
+                           lunch_start, lunch_end, max_daily_minutes):
+    """
+    A foglaltságok között kiszámolja a szabad blokkokat.
+    """
+    free_blocks = []
+    current = day_start
+    total_free_minutes = 0
+    
+    for busy_start, busy_end in busy_periods:
+        if busy_start > current:
+            # Szabad blokk: current → busy_start
+            free_minutes = (busy_start - current).total_seconds() / 60
+            if free_minutes >= 30:  # Minimum 30 perc
+                # Napi maximum ellenőrzése
+                remaining_daily = max_daily_minutes - total_free_minutes
+                if remaining_daily > 0:
+                    usable_minutes = min(free_minutes, remaining_daily)
+                    free_blocks.append((current, busy_start, usable_minutes))
+                    total_free_minutes += usable_minutes
+        
+        # Ugrás a foglaltság végére
+        if busy_end > current:
+            current = busy_end
+        
+        if total_free_minutes >= max_daily_minutes:
+            break
+    
+    # Maradék idő a nap végéig
+    if current < day_end and total_free_minutes < max_daily_minutes:
+        free_minutes = (day_end - current).total_seconds() / 60
+        if free_minutes >= 30:
+            remaining_daily = max_daily_minutes - total_free_minutes
+            usable_minutes = min(free_minutes, remaining_daily)
+            free_blocks.append((current, day_end, usable_minutes))
+    
+    return free_blocks
+
+
+def schedule_job(job):
+    """
+    Automatikusan beosztja a munkát a szabad idősávokba.
+    
+    Ez a feladat.txt-ben lévő pszeudokód implementációja.
+    
+    Visszaad egy dict-et:
+    {
+        'success': True/False,
+        'created_blocks': [...],
+        'scheduled_hours': X.X,
+        'missing_hours': X.X (ha nem sikerült mindent beosztani),
+        'message': str
+    }
+    """
+    settings = Settings.load()
+    
+    # Ellenőrizzük, hogy van-e beállított munkaóra
+    required_minutes = float(job.estimated_hours) * 60
+    
+    # Töröljük a korábbi automatikus beosztásokat
+    WorkSchedule.objects.filter(job=job, is_auto_scheduled=True).delete()
+    
+    # Kezdő dátum meghatározása
+    from_date = job.earliest_start_date if job.earliest_start_date else date.today()
+    to_date = job.deadline if job.deadline else from_date + timedelta(days=90)
+    
+    # Szabad idősávok lekérése
+    available_slots = get_available_slots(from_date, to_date)
+    
+    created_blocks = []
+    remaining_minutes = required_minutes
+    
+    for slot_start, slot_end, slot_minutes in available_slots:
+        if remaining_minutes <= 0:
+            break
+        
+        # Minimum blokk ellenőrzése
+        min_block = float(settings.min_schedule_block_hours) * 60
+        if slot_minutes < min_block:
+            continue
+        
+        used_minutes = min(remaining_minutes, slot_minutes)
+        
+        # Blokk létrehozása
+        block_end = slot_start + timedelta(minutes=used_minutes)
+        hours = round(used_minutes / 60, 1)
+        
+        schedule = WorkSchedule.objects.create(
+            job=job,
+            start_datetime=slot_start,
+            end_datetime=block_end,
+            hours=hours,
+            is_auto_scheduled=True,
+            note='Automatikus beosztás'
+        )
+        
+        created_blocks.append({
+            'id': schedule.id,
+            'start': schedule.start_datetime.isoformat(),
+            'end': schedule.end_datetime.isoformat(),
+            'hours': hours,
+        })
+        
+        remaining_minutes -= used_minutes
+    
+    # Hátralévő órák frissítése
+    scheduled_hours = (required_minutes - remaining_minutes) / 60
+    job.remaining_hours = max(0, float(job.estimated_hours) - scheduled_hours)
+    
+    if remaining_minutes > 0:
+        missing_hours = round(remaining_minutes / 60, 1)
+        job.status = 'draft'
+        job.save()
+        return {
+            'success': False,
+            'created_blocks': created_blocks,
+            'scheduled_hours': round(scheduled_hours, 1),
+            'missing_hours': missing_hours,
+            'message': (
+                f"A munkához {job.estimated_hours} óra kell. "
+                f"A megadott határidőig csak {scheduled_hours} óra szabad. "
+                f"Hiányzó idő: {missing_hours} óra."
+            )
+        }
+    
+    # Sikeres beosztás
+    job.status = 'planned'
+    job.remaining_hours = 0
+    job.save()
+    
+    return {
+        'success': True,
+        'created_blocks': created_blocks,
+        'scheduled_hours': round(scheduled_hours, 1),
+        'missing_hours': 0,
+        'message': f"A {job.estimated_hours} órás munka beosztása sikeres! {len(created_blocks)} blokkban."
+    }
+
+
+def get_free_slots_summary(from_date, to_date):
+    """
+    Visszaad egy összesítő dict-et a szabad idősávokról.
+    Hasznos a dashboard-hoz és a szabad órák megjelenítéséhez.
+    """
+    slots = get_available_slots(from_date, to_date)
+    
+    # Napi bontás
+    daily = {}
+    total_minutes = 0
+    
+    for start, end, minutes in slots:
+        day_key = start.strftime('%Y-%m-%d')
+        if day_key not in daily:
+            daily[day_key] = 0
+        daily[day_key] += minutes
+        total_minutes += minutes
+    
+    return {
+        'total_hours': round(total_minutes / 60, 1),
+        'daily_breakdown': {
+            day: round(mins / 60, 1)
+            for day, mins in sorted(daily.items())
+        },
+        'slot_count': len(slots),
+    }

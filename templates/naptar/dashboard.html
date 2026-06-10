@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard — Naptár{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="mb-4"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+
+    {# Statisztika kártyák #}
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Aktív munkák</h6>
+                    <h2 class="text-primary mb-0">{{ active_jobs_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Mai munkaóra</h6>
+                    <h2 class="text-success mb-0">{{ today_hours|floatformat:1 }} ó</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Heti terhelés</h6>
+                    <h2 class="text-info mb-0">{{ weekly_hours|floatformat:1 }} ó</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Szabad óra (30 nap)</h6>
+                    <h2 class="text-warning mb-0">{{ free_hours_next_30_days }} ó</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        {# Státusz szerinti megoszlás #}
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white"><strong>Státuszok</strong></div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span><span class="badge bg-warning me-1">&nbsp;</span> Folyamatban</span>
+                        <strong>{{ jobs_in_progress }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span><span class="badge bg-primary me-1">&nbsp;</span> Beosztva</span>
+                        <strong>{{ jobs_planned }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span><span class="badge bg-danger me-1">&nbsp;</span> Késésben</span>
+                        <strong>{{ jobs_overdue }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Mai beosztás #}
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white"><strong><i class="bi bi-calendar-check me-1"></i>Mai munkák</strong></div>
+                <div class="card-body p-0">
+                    {% if today_schedules %}
+                    <ul class="list-group list-group-flush">
+                        {% for s in today_schedules %}
+                        <li class="list-group-item d-flex justify-content-between">
+                            <div>
+                                <strong>{{ s.job.title }}</strong>
+                                <br><small class="text-muted">{{ s.start_datetime|date:"H:i" }} – {{ s.end_datetime|date:"H:i" }}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill align-self-center">{{ s.hours }}ó</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">
+                        <p class="mb-0">Nincs mára beosztás.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Közelgő határidők #}
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white"><strong><i class="bi bi-exclamation-triangle me-1"></i>Közelgő határidők</strong></div>
+                <div class="card-body p-0">
+                    {% if deadline_jobs %}
+                    <ul class="list-group list-group-flush">
+                        {% for job in deadline_jobs %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ job.title }}</strong>
+                                <br><small class="text-muted">{{ job.deadline|date:"Y-m-d" }}</small>
+                            </div>
+                            <span class="badge bg-{% if job.status == 'overdue' %}danger{% else %}warning text-dark{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">
+                        <p class="mb-0">Nincs közelgő határidő.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

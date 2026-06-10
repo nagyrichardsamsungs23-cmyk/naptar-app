@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Törlés: {{ job.title }} — Naptár{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>Munka törlése</h5>
+                </div>
+                <div class="card-body text-center">
+                    <i class="bi bi-trash text-danger" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">Biztosan törlöd?</h4>
+                    <p class="text-muted">
+                        <strong>{{ job.title }}</strong><br>
+                        {% if job.client_name %}{{ job.client_name }} — {% endif %}
+                        {{ job.estimated_hours }} óra
+                    </p>
+                    <p class="text-danger">
+                        <small>A munka törlésével az összes beosztás is törlődik. Ez nem vonható vissza!</small>
+                    </p>
+                    <form method="post" class="mt-3">
+                        {% csrf_token %}
+                        <div class="d-flex gap-2 justify-content-center">
+                            <a href="{% url 'calendar' %}" class="btn btn-outline-secondary">Mégsem</a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash me-1"></i>Végleges törlés
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
